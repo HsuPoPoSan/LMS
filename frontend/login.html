@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LicenseManager Pro — Sign In</title>
+  <meta name="description" content="Sign in to LicenseManager Pro." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0b0f;
+      --surface:   #111217;
+      --elevated:  #181a22;
+      --border:    rgba(255,255,255,0.08);
+      --primary:   #6c63ff;
+      --purple:    #a78bfa;
+      --glow:      rgba(108,99,255,0.4);
+      --text:      #f1f5f9;
+      --muted:     #4b5563;
+      --secondary: #94a3b8;
+      --red:       #ef4444;
+    }
+
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); }
+
+    /* ── Animated background ── */
+    .bg {
+      position: fixed; inset: 0; overflow: hidden; z-index: 0;
+    }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.18;
+      animation: float 8s ease-in-out infinite;
+    }
+    .orb-1 { width: 500px; height: 500px; background: var(--primary); top: -15%; left: -10%; animation-delay: 0s; }
+    .orb-2 { width: 400px; height: 400px; background: var(--purple); bottom: -10%; right: -5%; animation-delay: -3s; }
+    .orb-3 { width: 300px; height: 300px; background: #38bdf8; top: 50%; left: 60%; animation-delay: -6s; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50%       { transform: translateY(-30px) scale(1.05); }
+    }
+
+    /* ── Wrapper ── */
+    .wrap {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: rgba(17,18,23,0.8);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 44px 40px;
+      width: 100%; max-width: 420px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(108,99,255,0.1);
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Logo ── */
+    .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+    .logo-icon {
+      width: 46px; height: 46px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      box-shadow: 0 4px 20px var(--glow);
+    }
+    .logo-name { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .logo-badge {
+      font-size: 0.6rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+      color: #fff; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px;
+    }
+
+    /* ── Heading ── */
+    h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; }
+    .sub { font-size: 0.87rem; color: var(--secondary); margin-bottom: 28px; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block; font-size: 0.8rem; font-weight: 600;
+      color: var(--secondary); margin-bottom: 7px;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      font-size: 0.9rem; pointer-events: none;
+    }
+    .field {
+      width: 100%; padding: 11px 12px 11px 38px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-size: 0.9rem; font-family: 'Inter', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(108,99,255,0.25);
+    }
+    .toggle-pw {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; font-size: 0.9rem;
+      color: var(--muted); transition: color 0.2s;
+    }
+    .toggle-pw:hover { color: var(--text); }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 0.84rem; color: var(--red);
+      margin-bottom: 18px; display: none;
+    }
+
+    /* ── Button ── */
+    .btn-login {
+      width: 100%; padding: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+      border: none; border-radius: 10px;
+      color: #fff; font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px var(--glow);
+      margin-top: 4px;
+    }
+    .btn-login:hover { transform: translateY(-1px); box-shadow: 0 6px 25px var(--glow); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* ── Hint ── */
+    .hint {
+      margin-top: 20px; text-align: center;
+      font-size: 0.78rem; color: var(--muted);
+    }
+    .hint code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px; border-radius: 4px;
+      color: var(--secondary);
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-name">LicenseManager</div>
+        <div class="logo-badge">Pro</div>
+      </div>
+    </div>
+
+    <h1>Welcome back</h1>
+    <p class="sub">Sign in to manage your licenses</p>
+
+    <div class="error-box" id="errBox"></div>
+
+    <div class="form-group">
+      <label for="username">Username</label>
+      <div class="input-wrap">
+        <span class="input-icon">👤</span>
+        <input type="text" id="username" class="field" placeholder="Enter your username" autocomplete="username" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <div class="input-wrap">
+        <span class="input-icon">🔒</span>
+        <input type="password" id="password" class="field" placeholder="Enter your password" autocomplete="current-password" />
+        <button class="toggle-pw" id="eyeBtn" type="button" title="Show/hide password">👁️</button>
+      </div>
+    </div>
+
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign In</button>
+
+    <p class="hint">Default credentials: <code>admin</code> / <code>admin123</code></p>
+  </div>
+</div>
+
+<script>
+  // Redirect if already logged in
+  if (localStorage.getItem('lms_token')) {
+    window.location.href = '/';
+  }
+
+  // Toggle password visibility
+  document.getElementById('eyeBtn').addEventListener('click', () => {
+    const f = document.getElementById('password');
+    f.type = f.type === 'password' ? 'text' : 'password';
+  });
+
+  // Enter key on both fields
+  ['username', 'password'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    })
+  );
+
+  function showError(msg) {
+    const box = document.getElementById('errBox');
+    box.textContent = msg;
+    box.style.display = 'block';
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const btn      = document.getElementById('loginBtn');
+
+    document.getElementById('errBox').style.display = 'none';
+
+    if (!username || !password) {
+      showError('Please enter both username and password.');
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Signing in…';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showError(data.detail || 'Invalid credentials. Please try again.');
+        return;
+      }
+
+      localStorage.setItem('lms_token', data.token);
+      localStorage.setItem('lms_user', JSON.stringify(data.user));
+      window.location.href = '/';
+
+    } catch {
+      showError('Cannot connect to the server. Is it running?');
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+</script>
+</body>
+</html>

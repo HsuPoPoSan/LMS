@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ════════════════════════════════════════════════════════════
 #  LicenseManager Pro — start.sh
-#  Sets up venv, installs deps, and launches the Django server
+#  Sets up venv, installs deps, runs migrations, launches server
 # ════════════════════════════════════════════════════════════
 
 set -e
@@ -23,7 +23,6 @@ if [ ! -f ".env" ]; then
   fi
 fi
 
-# Check that credentials are set
 source .env 2>/dev/null || true
 if [[ "$SUPABASE_URL" == *"your-project-id"* ]] || [ -z "$SUPABASE_URL" ]; then
   echo "❌ ERROR: Please set SUPABASE_URL in your .env file."
@@ -45,6 +44,20 @@ source "$VENV/bin/activate"
 echo "📦 Installing dependencies…"
 pip install -q -r requirements.txt
 
+# ── Migrations ───────────────────────────────────────────────
+echo "🗄️  Running database migrations…"
+python manage.py migrate --run-syncdb -v 0 2>/dev/null || python manage.py migrate -v 0
+
+# ── Default admin user ───────────────────────────────────────
+python manage.py shell -c "
+from django.contrib.auth.models import User
+if not User.objects.filter(username='admin').exists():
+    User.objects.create_superuser('admin', 'admin@lms.local', 'admin123')
+    print('✅ Default admin created  →  username: admin  |  password: admin123')
+else:
+    print('ℹ️  Admin user already exists')
+" 2>/dev/null
+
 echo ""
 echo "✅ Django + DRF ready"
 echo ""
@@ -57,5 +70,4 @@ echo "   Dashboard: http://localhost:$PORT"
 echo "   API:       http://localhost:$PORT/api/"
 echo ""
 
-# Use Django's dev server (switch to gunicorn for production)
 python manage.py runserver "$HOST:$PORT"

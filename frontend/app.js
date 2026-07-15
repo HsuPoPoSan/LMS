@@ -3,18 +3,54 @@
    Vanilla JS SPA: Dashboard · Licenses · Validate · Audit Log
    ══════════════════════════════════════════════════════════════ */
 
-const API = '';   // same-origin: FastAPI serves on localhost:8000
+const API = '';   // same-origin
+
+/* ─────────────────────────────────────────────────────────────
+   UTILITIES
+───────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────
+   AUTH HELPERS
+───────────────────────────────────────────────────────────── */
+
+let currentUser = null;
+
+function getToken() { return localStorage.getItem('lms_token'); }
+
+function logout() {
+  const token = getToken();
+  if (token) {
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+    }).catch(() => {});
+  }
+  localStorage.removeItem('lms_token');
+  localStorage.removeItem('lms_user');
+  window.location.href = '/login/';
+}
 
 /* ─────────────────────────────────────────────────────────────
    UTILITIES
 ───────────────────────────────────────────────────────────── */
 
 async function apiFetch(path, options = {}) {
+  const token = getToken();
   const res = await fetch(`${API}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Token ${token}` } : {}),
+      ...options.headers,
+    },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+  if (res.status === 401) {
+    localStorage.removeItem('lms_token');
+    localStorage.removeItem('lms_user');
+    window.location.href = '/login/';
+    return;
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -45,8 +81,10 @@ function fmtDate(str) {
 function fmtDateTime(str) {
   if (!str) return '<span style="color:var(--text-muted)">—</span>';
   const d = new Date(str);
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric',
-    hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
 }
 
 function statusBadge(status) {
@@ -78,30 +116,32 @@ const pages = {
   dashboard: {
     title: 'Dashboard',
     sub: 'Overview of your license operations',
-    showSearch: false,
-    showNew: false,
+    showSearch: false, showNew: false,
     load: loadDashboard,
   },
   licenses: {
     title: 'Licenses',
     sub: 'Manage all license keys',
-    showSearch: true,
-    showNew: true,
+    showSearch: true, showNew: true,
     load: loadLicenses,
   },
   validate: {
     title: 'Validate License',
     sub: 'Check if a license key is valid',
-    showSearch: false,
-    showNew: false,
-    load: () => {},
+    showSearch: false, showNew: false,
+    load: () => { },
   },
   audit: {
     title: 'Audit Log',
     sub: 'Full history of all license actions',
-    showSearch: false,
-    showNew: false,
+    showSearch: false, showNew: false,
     load: loadAuditLogs,
+  },
+  users: {
+    title: 'Users',
+    sub: 'Manage user accounts and access',
+    showSearch: false, showNew: false,
+    load: loadUsers,
   },
 };
 
@@ -121,9 +161,9 @@ function navigate(page) {
 
   const cfg = pages[page];
   document.getElementById('pageTitle').textContent = cfg.title;
-  document.getElementById('pageSub').textContent   = cfg.sub;
+  document.getElementById('pageSub').textContent = cfg.sub;
   document.getElementById('globalSearch').style.display = cfg.showSearch ? 'flex' : 'none';
-  document.getElementById('newLicenseBtn').style.display = cfg.showNew  ? 'flex' : 'none';
+  document.getElementById('newLicenseBtn').style.display = cfg.showNew ? 'flex' : 'none';
 
   cfg.load();
 }
@@ -168,12 +208,12 @@ async function loadDashboard() {
 function renderStats(s) {
   const grid = document.getElementById('statsGrid');
   const cards = [
-    { label: 'Total Licenses',  value: s.total_licenses,   icon: '🔑', color: 'c-purple' },
-    { label: 'Active',          value: s.active_licenses,  icon: '✅', color: 'c-green'  },
-    { label: 'Inactive',        value: s.inactive_licenses,icon: '⏸️', color: 'c-blue'   },
-    { label: 'Expired',         value: s.expired_licenses, icon: '⌛', color: 'c-red'    },
-    { label: 'Revoked',         value: s.revoked_licenses, icon: '🚫', color: 'c-red'    },
-    { label: 'Expiring Soon',   value: s.expiring_soon,    icon: '⚠️', color: 'c-yellow' },
+    { label: 'Total Licenses', value: s.total_licenses, icon: '🔑', color: 'c-purple' },
+    { label: 'Active', value: s.active_licenses, icon: '✅', color: 'c-green' },
+    { label: 'Inactive', value: s.inactive_licenses, icon: '⏸️', color: 'c-blue' },
+    { label: 'Expired', value: s.expired_licenses, icon: '⌛', color: 'c-red' },
+    { label: 'Revoked', value: s.revoked_licenses, icon: '🚫', color: 'c-red' },
+    { label: 'Expiring Soon', value: s.expiring_soon, icon: '⚠️', color: 'c-yellow' },
   ];
   grid.innerHTML = cards.map(c => `
     <div class="stat-card ${c.color}">
@@ -249,32 +289,33 @@ function renderLicensesTable(data) {
       </td>
       <td>
         ${l.device_id
-          ? `<span class="mono" style="font-size:0.75rem;color:var(--accent-blue)" title="${l.device_id}">${truncate(l.device_id, 20)}</span>`
-          : `<span style="color:var(--text-muted);font-size:0.8rem">Unbound</span>`}
+      ? `<span class="mono" style="font-size:0.75rem;color:var(--accent-blue)" title="${l.device_id}">${truncate(l.device_id, 20)}</span>`
+      : `<span style="color:var(--text-muted);font-size:0.8rem">Unbound</span>`}
       </td>
       <td style="font-size:0.8rem">${fmtDate(l.activated_at)}</td>
       <td style="font-size:0.8rem">
         ${fmtDate(l.expiry_date)}
         ${l.days_until_expiry !== null && l.days_until_expiry !== undefined
-          ? `<br>${daysChip(l.days_until_expiry)}`
-          : ''}
+      ? `<br>${daysChip(l.days_until_expiry)}`
+      : ''}
       </td>
       <td style="font-size:0.8rem">${fmtDate(l.expired_at)}</td>
       <td>${statusBadge(l.status)}</td>
       <td>
         <div class="action-group">
+          <button class="btn-icon btn-edit" onclick="openEditModal('${l.id}')" title="Edit">✏️ Edit</button>
           ${l.status === 'inactive' || l.status === 'active'
-            ? `<button class="btn-icon btn-activate" onclick="openActivateModal('${l.id}','${escAttr(l.license_key)}')" title="Activate">⚡ Activate</button>`
-            : ''}
+      ? `<button class="btn-icon btn-activate" onclick="openActivateModal('${l.id}','${escAttr(l.license_key)}')" title="Activate">⚡ Activate</button>`
+      : ''}
           ${l.status !== 'revoked'
-            ? `<button class="btn-icon btn-revoke" onclick="revokeAction('${l.id}')" title="Revoke">🚫</button>`
-            : ''}
+      ? `<button class="btn-icon btn-revoke" onclick="revokeAction('${l.id}')" title="Revoke">🚫</button>`
+      : ''}
           ${l.status === 'active' || l.status === 'inactive'
-            ? `<button class="btn-icon btn-expire" onclick="expireAction('${l.id}')" title="Expire">⌛</button>`
-            : ''}
+      ? `<button class="btn-icon btn-expire" onclick="expireAction('${l.id}')" title="Expire">⌛</button>`
+      : ''}
           ${l.status === 'revoked' || l.status === 'expired'
-            ? `<button class="btn-icon" onclick="reactivateAction('${l.id}')" title="Reset to Inactive">♻️</button>`
-            : ''}
+      ? `<button class="btn-icon" onclick="reactivateAction('${l.id}')" title="Reset to Inactive">♻️</button>`
+      : ''}
           <button class="btn-icon btn-delete" onclick="deleteAction('${l.id}')" title="Delete">🗑️</button>
         </div>
       </td>
@@ -310,7 +351,7 @@ function openCreateModal() {
 
 function closeCreateModal() {
   document.getElementById('createModal').classList.remove('open');
-  ['cName','cEmail','cProduct','cNotes','cCustomKey'].forEach(id => {
+  ['cName', 'cEmail', 'cProduct', 'cNotes', 'cCustomKey'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('cMaxAct').value = '1';
@@ -328,12 +369,12 @@ async function createLicense() {
   const body = {
     customer_name,
     customer_email: document.getElementById('cEmail').value.trim(),
-    product_name:   document.getElementById('cProduct').value.trim() || 'General',
-    license_type:   document.getElementById('cType').value,
+    product_name: document.getElementById('cProduct').value.trim() || 'General',
+    license_type: document.getElementById('cType').value,
     expiry_date,
     max_activations: parseInt(document.getElementById('cMaxAct').value) || 1,
-    notes:          document.getElementById('cNotes').value.trim(),
-    custom_key:     document.getElementById('cCustomKey').value.trim() || null,
+    notes: document.getElementById('cNotes').value.trim(),
+    custom_key: document.getElementById('cCustomKey').value.trim() || null,
   };
 
   try {
@@ -377,6 +418,73 @@ async function doActivate() {
     loadLicenses(currentStatus);
   } catch (e) {
     toast(`Activation failed: ${e.message}`, 'error');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   EDIT LICENSE MODAL
+───────────────────────────────────────────────────────────── */
+
+let _editLicId = null;
+
+async function openEditModal(licenseId) {
+  try {
+    const lic = await apiFetch(`/api/licenses/${licenseId}`);
+    _editLicId = licenseId;
+
+    document.getElementById('editLicKey').textContent = `License: ${lic.license_key}`;
+    document.getElementById('eName').value = lic.customer_name || '';
+    document.getElementById('eEmail').value = lic.customer_email || '';
+    document.getElementById('eProduct').value = lic.product_name || '';
+    document.getElementById('eType').value = lic.license_type || 'standard';
+    document.getElementById('eMaxAct').value = lic.max_activations ?? 1;
+    document.getElementById('eNotes').value = lic.notes || '';
+    document.getElementById('eStatus').value = lic.status || 'inactive';
+
+    // Convert ISO date → YYYY-MM-DD for the date input
+    if (lic.expiry_date) {
+      const d = new Date(lic.expiry_date);
+      document.getElementById('eExpiry').value = d.toISOString().slice(0, 10);
+    } else {
+      document.getElementById('eExpiry').value = '';
+    }
+
+    document.getElementById('editModal').classList.add('open');
+  } catch (e) {
+    toast(`Failed to load license: ${e.message}`, 'error');
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+  _editLicId = null;
+}
+
+async function saveEdit() {
+  const customer_name = document.getElementById('eName').value.trim();
+  if (!customer_name) { toast('Customer name is required', 'error'); return; }
+
+  const expiryRaw = document.getElementById('eExpiry').value;
+  const expiry_date = expiryRaw ? new Date(expiryRaw).toISOString() : null;
+
+  const body = {
+    customer_name,
+    customer_email: document.getElementById('eEmail').value.trim() || '',
+    product_name: document.getElementById('eProduct').value.trim() || 'General',
+    license_type: document.getElementById('eType').value,
+    expiry_date,
+    max_activations: parseInt(document.getElementById('eMaxAct').value) || 1,
+    notes: document.getElementById('eNotes').value.trim() || '',
+    status: document.getElementById('eStatus').value,
+  };
+
+  try {
+    await apiFetch(`/api/licenses/${_editLicId}`, { method: 'PATCH', body });
+    toast('License updated successfully!', 'success');
+    closeEditModal();
+    loadLicenses(currentStatus);
+  } catch (e) {
+    toast(`Update failed: ${e.message}`, 'error');
   }
 }
 
@@ -434,8 +542,8 @@ async function deleteAction(id) {
 
 async function validateLicense() {
   const license_key = document.getElementById('validateKey').value.trim().toUpperCase();
-  const device_id   = document.getElementById('validateDevice').value.trim() || null;
-  const resultEl    = document.getElementById('validateResult');
+  const device_id = document.getElementById('validateDevice').value.trim() || null;
+  const resultEl = document.getElementById('validateResult');
 
   if (!license_key) { toast('Enter a license key to validate', 'error'); return; }
 
@@ -494,18 +602,18 @@ async function loadAuditLogs() {
       return;
     }
     const actionColors = {
-      CREATE:           'var(--accent-green)',
-      ACTIVATE:         'var(--accent-blue)',
-      REVOKE:           'var(--accent-red)',
-      EXPIRE:           'var(--accent-orange)',
-      DELETE:           'var(--accent-red)',
-      UPDATE:           'var(--accent-primary)',
-      REACTIVATE:       'var(--accent-purple)',
+      CREATE: 'var(--accent-green)',
+      ACTIVATE: 'var(--accent-blue)',
+      REVOKE: 'var(--accent-red)',
+      EXPIRE: 'var(--accent-orange)',
+      DELETE: 'var(--accent-red)',
+      UPDATE: 'var(--accent-primary)',
+      REACTIVATE: 'var(--accent-purple)',
     };
     tbody.innerHTML = data.map(log => {
       const color = actionColors[log.action] || 'var(--text-secondary)';
       const details = log.details && Object.keys(log.details).length
-        ? Object.entries(log.details).map(([k,v]) => `<span style="color:var(--text-muted)">${k}:</span> ${escHtml(String(v))}`).join(' · ')
+        ? Object.entries(log.details).map(([k, v]) => `<span style="color:var(--text-muted)">${k}:</span> ${escHtml(String(v))}`).join(' · ')
         : '—';
       return `
         <tr>
@@ -530,9 +638,14 @@ async function loadAuditLogs() {
 document.getElementById('createModal').addEventListener('click', e => {
   if (e.target.id === 'createModal') closeCreateModal();
 });
-
 document.getElementById('activateModal').addEventListener('click', e => {
   if (e.target.id === 'activateModal') closeActivateModal();
+});
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target.id === 'editModal') closeEditModal();
+});
+document.getElementById('userModal').addEventListener('click', e => {
+  if (e.target.id === 'userModal') closeUserModal();
 });
 
 /* ESC to close */
@@ -540,8 +653,149 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeCreateModal();
     closeActivateModal();
+    closeEditModal();
+    closeUserModal();
   }
 });
+
+/* ─────────────────────────────────────────────────────────────
+   USERS PAGE
+───────────────────────────────────────────────────────────── */
+
+async function loadUsers() {
+  const tbody = document.getElementById('usersBody');
+  tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">Loading…</td></tr>`;
+  try {
+    const data = await apiFetch('/api/users');
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">No users found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(u => {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '—';
+      const roleBadge = u.is_staff
+        ? `<span class="status-badge" style="background:rgba(108,99,255,0.15);color:var(--accent-primary)">Admin</span>`
+        : `<span class="status-badge s-inactive">User</span>`;
+      const activeBadge = u.is_active
+        ? `<span class="status-badge s-active">Active</span>`
+        : `<span class="status-badge s-revoked">Disabled</span>`;
+      const isSelf = currentUser && u.id === currentUser.id;
+      return `
+        <tr id="urow-${u.id}">
+          <td><strong style="font-size:0.88rem">${escHtml(u.username)}</strong>${isSelf ? ' <span style="font-size:0.7rem;color:var(--accent-primary)">(you)</span>' : ''}</td>
+          <td style="font-size:0.84rem">${escHtml(name)}</td>
+          <td style="font-size:0.82rem;color:var(--text-secondary)">${escHtml(u.email || '—')}</td>
+          <td>${roleBadge}</td>
+          <td>${activeBadge}</td>
+          <td style="font-size:0.78rem;color:var(--text-muted)">${fmtDateTime(u.last_login)}</td>
+          <td>
+            <div class="action-group">
+              <button class="btn-icon btn-edit" onclick="openUserModal(${u.id})" title="Edit">✏️ Edit</button>
+              ${!isSelf ? `<button class="btn-icon btn-delete" onclick="deleteUser(${u.id}, '${escAttr(u.username)}')" title="Delete">🗑️</button>` : ''}
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="color:var(--accent-red)">⚠️ ${e.message}</td></tr>`;
+    toast(`Failed to load users: ${e.message}`, 'error');
+  }
+}
+
+let _editUserId = null;
+
+async function openUserModal(userId) {
+  _editUserId = userId;
+  const isEdit = !!userId;
+
+  document.getElementById('userModalTitle').textContent = isEdit ? '✏️ Edit User' : '👤 New User';
+  document.getElementById('userModalSaveBtn').textContent = isEdit ? 'Save Changes' : 'Create User';
+  document.getElementById('uPwHint').textContent = isEdit ? '(leave blank to keep)' : '*';
+  document.getElementById('uStatusGroup').style.display = isEdit ? '' : 'none';
+
+  // Reset fields
+  ['uUsername', 'uPassword', 'uFirst', 'uLast', 'uEmail'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('uRole').value = 'false';
+  document.getElementById('uActive').value = 'true';
+  document.getElementById('uUsername').disabled = false;
+
+  if (isEdit) {
+    try {
+      const u = await apiFetch(`/api/users/${userId}`);
+      document.getElementById('uUsername').value  = u.username;
+      document.getElementById('uUsername').disabled = true; // username not changeable
+      document.getElementById('uFirst').value    = u.first_name || '';
+      document.getElementById('uLast').value     = u.last_name  || '';
+      document.getElementById('uEmail').value    = u.email      || '';
+      document.getElementById('uRole').value     = String(u.is_staff);
+      document.getElementById('uActive').value   = String(u.is_active);
+    } catch (e) {
+      toast(`Failed to load user: ${e.message}`, 'error');
+      return;
+    }
+  }
+
+  document.getElementById('userModal').classList.add('open');
+}
+
+function closeUserModal() {
+  document.getElementById('userModal').classList.remove('open');
+  _editUserId = null;
+}
+
+async function saveUser() {
+  const isEdit = !!_editUserId;
+  const pw = document.getElementById('uPassword').value;
+
+  if (!isEdit) {
+    const username = document.getElementById('uUsername').value.trim();
+    if (!username) { toast('Username is required', 'error'); return; }
+    if (!pw)       { toast('Password is required for new users', 'error'); return; }
+  }
+
+  const body = isEdit
+    ? {
+        first_name: document.getElementById('uFirst').value.trim(),
+        last_name:  document.getElementById('uLast').value.trim(),
+        email:      document.getElementById('uEmail').value.trim(),
+        is_staff:   document.getElementById('uRole').value === 'true',
+        is_active:  document.getElementById('uActive').value === 'true',
+        ...(pw ? { password: pw } : {}),
+      }
+    : {
+        username:   document.getElementById('uUsername').value.trim(),
+        password:   pw,
+        first_name: document.getElementById('uFirst').value.trim(),
+        last_name:  document.getElementById('uLast').value.trim(),
+        email:      document.getElementById('uEmail').value.trim(),
+        is_staff:   document.getElementById('uRole').value === 'true',
+      };
+
+  try {
+    if (isEdit) {
+      await apiFetch(`/api/users/${_editUserId}`, { method: 'PATCH', body });
+      toast('User updated!', 'success');
+    } else {
+      await apiFetch('/api/users', { method: 'POST', body });
+      toast('User created!', 'success');
+    }
+    closeUserModal();
+    loadUsers();
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  try {
+    await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+    toast(`User "${username}" deleted.`, 'info');
+    loadUsers();
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
 
 /* ─────────────────────────────────────────────────────────────
    SECURITY: XSS escape helpers
@@ -562,8 +816,29 @@ function escAttr(str) {
 ───────────────────────────────────────────────────────────── */
 
 (async function init() {
+  // Auth guard
+  if (!getToken()) {
+    window.location.href = '/login/';
+    return;
+  }
+
+  // Load current user from storage
+  try { currentUser = JSON.parse(localStorage.getItem('lms_user') || '{}'); } catch { currentUser = {}; }
+
+  // Populate sidebar user info
+  if (currentUser.username) {
+    document.getElementById('suName').textContent  = currentUser.username;
+    document.getElementById('suRole').textContent  = currentUser.is_staff ? 'Administrator' : 'User';
+    document.getElementById('suAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+  }
+
+  // Show Users nav only for admins
+  if (currentUser.is_staff) {
+    document.getElementById('nav-users').style.display = '';
+  }
+
+  // Bump cache-bust version each session
   await checkConnection();
   navigate('dashboard');
-  // Refresh connection status every 30s
   setInterval(checkConnection, 30_000);
 })();

@@ -109,7 +109,7 @@ class LicenseDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        updates = {k: v for k, v in serializer.validated_data.items() if v is not None}
+        updates = {k: v for k, v in serializer.validated_data.items()}
         if not updates:
             return _400("No fields to update")
 

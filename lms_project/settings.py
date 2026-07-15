@@ -18,23 +18,27 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0").split(
 # ── Installed Apps ─────────────────────────────────────────────────────────
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
-    "django.contrib.auth",          # required by DRF internals
+    "django.contrib.auth",
+    "django.contrib.sessions",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework.authtoken",
     "corsheaders",
     "licenses",
+    "users",
 ]
 
 # ── Middleware ─────────────────────────────────────────────────────────────
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
 ]
 
 ROOT_URLCONF = "lms_project.urls"
 
-# Don't redirect /api/foo → /api/foo/ — keep parity with FastAPI-style URLs
 APPEND_SLASH = False
 
 TEMPLATES = [
@@ -52,8 +56,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "lms_project.wsgi.application"
 
-# ── Database (not used — we connect to Supabase directly) ─────────────────
-DATABASES = {}
+# ── Database — SQLite for Django auth, Supabase for licenses ──────────────
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
 
 # ── Static Files ───────────────────────────────────────────────────────────
 STATIC_URL = "/static/"
@@ -70,10 +79,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "DEFAULT_PERMISSION_CLASSES": [],
-    # Disable AnonymousUser lookup — no Django auth DB needed
-    "UNAUTHENTICATED_USER": None,
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 # ── Supabase (read by database.py) ─────────────────────────────────────────

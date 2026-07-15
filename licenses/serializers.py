@@ -23,6 +23,11 @@ class LicenseUpdateSerializer(serializers.Serializer):
     expiry_date = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     max_activations = serializers.IntegerField(required=False, min_value=1)
     notes = serializers.CharField(required=False, allow_blank=True)
+    status = serializers.ChoiceField(
+        required=False,
+        choices=['inactive', 'active', 'expired', 'revoked'],
+        allow_blank=True,
+    )
 
 
 class ActivateSerializer(serializers.Serializer):

@@ -7,7 +7,7 @@
   <meta name="description" content="Manage software licenses with ease. Generate, activate, revoke, and validate license keys connected to Supabase." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=3" />
 </head>
 <body>
 
@@ -38,10 +38,22 @@
       <span class="nav-icon">📋</span>
       <span>Audit Log</span>
     </a>
+    <a href="#" class="nav-item" data-page="users" id="nav-users" style="display:none">
+      <span class="nav-icon">👥</span>
+      <span>Users</span>
+    </a>
   </nav>
 
   <div class="sidebar-footer">
-    <div class="sidebar-version">v1.0.0</div>
+    <div class="sidebar-user" id="sidebarUser">
+      <div class="su-avatar" id="suAvatar">A</div>
+      <div class="su-info">
+        <div class="su-name" id="suName">Admin</div>
+        <div class="su-role" id="suRole">Administrator</div>
+      </div>
+      <button class="su-logout" onclick="logout()" title="Logout">⏏</button>
+    </div>
+    <div class="sidebar-version">v2.0.0</div>
   </div>
 </aside>
 
@@ -184,6 +196,32 @@
     </div>
   </section>
 
+  <!-- ─── USERS PAGE ─── -->
+  <section class="page" id="page-users">
+    <div class="section-header">
+      <h2 class="section-title">👥 User Accounts</h2>
+      <button class="btn btn-primary" onclick="openUserModal(null)">+ New User</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="usersTable">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Last Login</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody">
+          <tr><td colspan="7" class="loading-cell">Loading users…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
 </main>
 
 <!-- ══════════════ CREATE LICENSE MODAL ══════════════ -->
@@ -267,9 +305,130 @@
   </div>
 </div>
 
+<!-- ══════════════ EDIT LICENSE MODAL ══════════════ -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit License</h3>
+      <button class="modal-close" onclick="closeEditModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-info" id="editLicKey" style="margin-bottom:4px;"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Customer Name <span class="required">*</span></label>
+          <input type="text" id="eName" class="input-field" placeholder="Alice Johnson" />
+        </div>
+        <div class="form-group">
+          <label>Customer Email</label>
+          <input type="email" id="eEmail" class="input-field" placeholder="alice@example.com" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Product Name</label>
+          <input type="text" id="eProduct" class="input-field" placeholder="My Software Pro" />
+        </div>
+        <div class="form-group">
+          <label>License Type</label>
+          <select id="eType" class="input-field">
+            <option value="trial">Trial</option>
+            <option value="standard">Standard</option>
+            <option value="professional">Professional</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Expiry Date</label>
+          <input type="date" id="eExpiry" class="input-field" />
+        </div>
+        <div class="form-group">
+          <label>Max Activations</label>
+          <input type="number" id="eMaxAct" class="input-field" value="1" min="1" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="eStatus" class="input-field">
+          <option value="inactive">Inactive</option>
+          <option value="active">Active</option>
+          <option value="expired">Expired</option>
+          <option value="revoked">Revoked</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="eNotes" class="input-field" rows="2" placeholder="Optional notes…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ USER MODAL ══════════════ -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 id="userModalTitle">👤 New User</h3>
+      <button class="modal-close" onclick="closeUserModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Username <span class="required">*</span></label>
+          <input type="text" id="uUsername" class="input-field" placeholder="john_doe" />
+        </div>
+        <div class="form-group">
+          <label>Password <span id="uPwHint" class="label-hint"></span></label>
+          <input type="password" id="uPassword" class="input-field" placeholder="Min 6 characters" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Name</label>
+          <input type="text" id="uFirst" class="input-field" placeholder="John" />
+        </div>
+        <div class="form-group">
+          <label>Last Name</label>
+          <input type="text" id="uLast" class="input-field" placeholder="Doe" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="uEmail" class="input-field" placeholder="john@example.com" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role</label>
+          <select id="uRole" class="input-field">
+            <option value="false">User</option>
+            <option value="true">Administrator</option>
+          </select>
+        </div>
+        <div class="form-group" id="uStatusGroup" style="display:none">
+          <label>Status</label>
+          <select id="uActive" class="input-field">
+            <option value="true">Active</option>
+            <option value="false">Disabled</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
+      <button class="btn btn-primary" id="userModalSaveBtn" onclick="saveUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════ TOAST ══════════════ -->
 <div id="toastContainer"></div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=3"></script>
 </body>
 </html>

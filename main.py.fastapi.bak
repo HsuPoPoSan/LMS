@@ -1,0 +1,263 @@
+"""
+FastAPI backend for License Management System
+Routes: /api/licenses, /api/licenses/{id}/activate, /api/validate, /api/stats
+"""
+import os
+from datetime import datetime, timezone
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+from database import Database
+from license_utils import generate_license_key, validate_key_format, days_until_expiry
+
+load_dotenv()
+
+# ── App setup ──────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="License Management System API",
+    description="REST API for managing software licenses via Supabase",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+db = Database()
+
+# ── Pydantic Schemas ────────────────────────────────────────────────────────
+
+class LicenseCreate(BaseModel):
+    customer_name: str = Field(..., min_length=1, max_length=200)
+    customer_email: Optional[str] = ""
+    product_name: Optional[str] = "General"
+    license_type: Optional[str] = "standard"
+    expiry_date: Optional[str] = None          # ISO date string
+    max_activations: Optional[int] = 1
+    notes: Optional[str] = ""
+    custom_key: Optional[str] = None           # provide your own key
+
+
+class LicenseUpdate(BaseModel):
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    product_name: Optional[str] = None
+    license_type: Optional[str] = None
+    expiry_date: Optional[str] = None
+    max_activations: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class ActivateRequest(BaseModel):
+    device_id: str = Field(..., min_length=1, max_length=300)
+
+
+class ValidateRequest(BaseModel):
+    license_key: str
+    device_id: Optional[str] = None
+
+
+# ── Helper ──────────────────────────────────────────────────────────────────
+
+def _enrich(lic: dict) -> dict:
+    """Attach computed fields to a license record."""
+    if lic:
+        lic["days_until_expiry"] = days_until_expiry(lic.get("expiry_date"))
+    return lic
+
+
+# ── Root / Frontend ─────────────────────────────────────────────────────────
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return FileResponse("frontend/index.html")
+
+
+# ── Stats ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/stats")
+def get_stats():
+    """Dashboard statistics."""
+    return db.get_dashboard_stats()
+
+
+# ── Licenses ────────────────────────────────────────────────────────────────
+
+@app.get("/api/licenses")
+def list_licenses(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    search: Optional[str] = Query(None, description="Search by key/customer/device"),
+):
+    """List all licenses."""
+    licenses = db.get_licenses(status_filter=status, search=search)
+    return [_enrich(l) for l in licenses]
+
+
+@app.get("/api/licenses/{license_id}")
+def get_license(license_id: str):
+    """Get a single license by ID."""
+    lic = db.get_license_by_id(license_id)
+    if not lic:
+        raise HTTPException(status_code=404, detail="License not found")
+    return _enrich(lic)
+
+
+@app.post("/api/licenses", status_code=201)
+def create_license(body: LicenseCreate):
+    """Create a new license."""
+    # Determine key
+    key = body.custom_key or generate_license_key()
+    if not validate_key_format(key):
+        raise HTTPException(status_code=400, detail="Invalid license key format")
+
+    # Check uniqueness
+    existing = db.get_license_by_key(key)
+    if existing:
+        raise HTTPException(status_code=409, detail="License key already exists")
+
+    lic = db.create_license(
+        license_key=key,
+        customer_name=body.customer_name,
+        customer_email=body.customer_email or "",
+        product_name=body.product_name or "General",
+        license_type=body.license_type or "standard",
+        expiry_date=body.expiry_date,
+        max_activations=body.max_activations or 1,
+        notes=body.notes or "",
+    )
+    if not lic:
+        raise HTTPException(status_code=500, detail="Failed to create license")
+    return _enrich(lic)
+
+
+@app.patch("/api/licenses/{license_id}")
+def update_license(license_id: str, body: LicenseUpdate):
+    """Update license metadata."""
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    lic = db.update_license(license_id, **updates)
+    if not lic:
+        raise HTTPException(status_code=404, detail="License not found")
+    return _enrich(lic)
+
+
+@app.delete("/api/licenses/{license_id}", status_code=204)
+def delete_license(license_id: str):
+    """Delete a license permanently."""
+    existing = db.get_license_by_id(license_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="License not found")
+    db.delete_license(license_id)
+    return None
+
+
+# ── Activation / Status Actions ─────────────────────────────────────────────
+
+@app.post("/api/licenses/{license_id}/activate")
+def activate_license(license_id: str, body: ActivateRequest):
+    """Activate a license for a specific device."""
+    lic = db.get_license_by_id(license_id)
+    if not lic:
+        raise HTTPException(status_code=404, detail="License not found")
+    if lic["status"] == "revoked":
+        raise HTTPException(status_code=403, detail="License is revoked and cannot be activated")
+    if lic["status"] == "expired":
+        raise HTTPException(status_code=403, detail="License has expired")
+    if lic.get("device_id") and lic["device_id"] != body.device_id:
+        raise HTTPException(status_code=409, detail="License is already bound to a different device")
+
+    result = db.activate_license(license_id, body.device_id)
+    if not result:
+        raise HTTPException(status_code=500, detail="Activation failed")
+    return _enrich(result)
+
+
+@app.post("/api/licenses/{license_id}/revoke")
+def revoke_license(license_id: str):
+    """Revoke a license."""
+    existing = db.get_license_by_id(license_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="License not found")
+    result = db.revoke_license(license_id)
+    return _enrich(result)
+
+
+@app.post("/api/licenses/{license_id}/expire")
+def expire_license(license_id: str):
+    """Manually expire a license."""
+    existing = db.get_license_by_id(license_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="License not found")
+    result = db.expire_license(license_id)
+    return _enrich(result)
+
+
+@app.post("/api/licenses/{license_id}/reactivate")
+def reactivate_license(license_id: str):
+    """Reset a license back to inactive (un-bound from device)."""
+    existing = db.get_license_by_id(license_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="License not found")
+    result = db.update_license(
+        license_id,
+        status="inactive",
+        device_id=None,
+        activated_at=None,
+        expired_at=None,
+    )
+    return _enrich(result)
+
+
+# ── Validation Endpoint ─────────────────────────────────────────────────────
+
+@app.post("/api/validate")
+def validate_license(body: ValidateRequest):
+    """
+    Validate a license key.
+    Optionally include device_id to verify device binding.
+    """
+    result = db.validate_license_key(body.license_key, body.device_id)
+    if result.get("license"):
+        result["license"] = _enrich(result["license"])
+    return result
+
+
+# ── Expiring Soon ────────────────────────────────────────────────────────────
+
+@app.get("/api/licenses/expiring/{days}")
+def expiring_soon(days: int = 30):
+    """Get licenses expiring within N days."""
+    return [_enrich(l) for l in db.get_expiring_soon(days)]
+
+
+# ── Audit Logs ────────────────────────────────────────────────────────────────
+
+@app.get("/api/audit-logs")
+def get_audit_logs(limit: int = Query(100, ge=1, le=500)):
+    """Fetch audit log entries."""
+    return db.get_audit_logs(limit=limit)
+
+
+# ── Mount frontend static files ──────────────────────────────────────────────
+if os.path.isdir("frontend"):
+    app.mount("/static", StaticFiles(directory="frontend"), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", 8000)),
+        reload=True,
+    )

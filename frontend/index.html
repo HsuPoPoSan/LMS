@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LicenseManager Pro — Dashboard</title>
+  <meta name="description" content="Manage software licenses with ease. Generate, activate, revoke, and validate license keys connected to Supabase." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ══════════════ SIDEBAR ══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">⚡</div>
+    <div class="logo-text">
+      <span class="logo-name">LicenseManager</span>
+      <span class="logo-badge">Pro</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-page="dashboard" id="nav-dashboard">
+      <span class="nav-icon">📊</span>
+      <span>Dashboard</span>
+    </a>
+    <a href="#" class="nav-item" data-page="licenses" id="nav-licenses">
+      <span class="nav-icon">🔑</span>
+      <span>Licenses</span>
+    </a>
+    <a href="#" class="nav-item" data-page="validate" id="nav-validate">
+      <span class="nav-icon">✅</span>
+      <span>Validate</span>
+    </a>
+    <a href="#" class="nav-item" data-page="audit" id="nav-audit">
+      <span class="nav-icon">📋</span>
+      <span>Audit Log</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-version">v1.0.0</div>
+  </div>
+</aside>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<main class="main-content">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="page-title" id="pageTitle">Dashboard</h1>
+      <p class="page-sub" id="pageSub">Overview of your license operations</p>
+    </div>
+    <div class="topbar-right">
+      <div class="search-bar" id="globalSearch" style="display:none">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Search licenses, customers…" />
+      </div>
+      <button class="btn btn-primary" id="newLicenseBtn" style="display:none" onclick="openCreateModal()">
+        + New License
+      </button>
+      <div class="status-dot" id="connDot" title="Checking connection…"></div>
+    </div>
+  </header>
+
+  <!-- ─── DASHBOARD PAGE ─── -->
+  <section class="page active" id="page-dashboard">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card shimmer"><div class="stat-inner"></div></div>
+      <div class="stat-card shimmer"><div class="stat-inner"></div></div>
+      <div class="stat-card shimmer"><div class="stat-inner"></div></div>
+      <div class="stat-card shimmer"><div class="stat-inner"></div></div>
+      <div class="stat-card shimmer"><div class="stat-inner"></div></div>
+      <div class="stat-card shimmer"><div class="stat-inner"></div></div>
+    </div>
+
+    <div class="section-header">
+      <h2 class="section-title">⏰ Expiring Soon <span class="badge badge-warning" id="expBadge">0</span></h2>
+      <button class="btn btn-ghost" onclick="loadExpiring()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="expiringTable">
+        <thead>
+          <tr>
+            <th>License Key</th>
+            <th>Customer</th>
+            <th>Product</th>
+            <th>Expiry Date</th>
+            <th>Days Left</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="expiringBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─── LICENSES PAGE ─── -->
+  <section class="page" id="page-licenses">
+    <div class="filter-bar">
+      <div class="filter-pills" id="filterPills">
+        <button class="pill active" data-status="all">All</button>
+        <button class="pill" data-status="active">Active</button>
+        <button class="pill" data-status="inactive">Inactive</button>
+        <button class="pill" data-status="expired">Expired</button>
+        <button class="pill" data-status="revoked">Revoked</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="licensesTable">
+        <thead>
+          <tr>
+            <th>License Key</th>
+            <th>Customer</th>
+            <th>Product</th>
+            <th>Device ID</th>
+            <th>Activated At</th>
+            <th>Expiry Date</th>
+            <th>Expired At</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="licensesBody">
+          <tr><td colspan="9" class="loading-cell">Loading licenses…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="licensesCount" class="count-label">— licenses</span>
+    </div>
+  </section>
+
+  <!-- ─── VALIDATE PAGE ─── -->
+  <section class="page" id="page-validate">
+    <div class="validate-container">
+      <div class="validate-card">
+        <div class="validate-icon">🛡️</div>
+        <h2>Validate a License Key</h2>
+        <p class="validate-desc">Enter a license key to check its validity, status, and device binding.</p>
+
+        <div class="form-group">
+          <label>License Key</label>
+          <input type="text" id="validateKey" class="input-field mono"
+                 placeholder="LMS-XXXXX-XXXXX-XXXXX-XXXXX" />
+        </div>
+        <div class="form-group">
+          <label>Device ID <span class="label-hint">(optional)</span></label>
+          <input type="text" id="validateDevice" class="input-field mono"
+                 placeholder="e.g. MAC-AA:BB:CC:DD:EE:FF" />
+        </div>
+        <button class="btn btn-primary btn-full" onclick="validateLicense()">Validate License</button>
+
+        <div id="validateResult" class="validate-result hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── AUDIT LOG PAGE ─── -->
+  <section class="page" id="page-audit">
+    <div class="section-header">
+      <h2 class="section-title">📋 Audit Log</h2>
+      <button class="btn btn-ghost" onclick="loadAuditLogs()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="auditTable">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Action</th>
+            <th>License Key</th>
+            <th>Details</th>
+            <th>Performed By</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody">
+          <tr><td colspan="5" class="loading-cell">Loading logs…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════════ CREATE LICENSE MODAL ══════════════ -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✨ Create New License</h3>
+      <button class="modal-close" onclick="closeCreateModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Customer Name <span class="required">*</span></label>
+          <input type="text" id="cName" class="input-field" placeholder="Alice Johnson" />
+        </div>
+        <div class="form-group">
+          <label>Customer Email</label>
+          <input type="email" id="cEmail" class="input-field" placeholder="alice@example.com" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Product Name</label>
+          <input type="text" id="cProduct" class="input-field" placeholder="My Software Pro" />
+        </div>
+        <div class="form-group">
+          <label>License Type</label>
+          <select id="cType" class="input-field">
+            <option value="trial">Trial</option>
+            <option value="standard" selected>Standard</option>
+            <option value="professional">Professional</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Expiry Date</label>
+          <input type="date" id="cExpiry" class="input-field" />
+        </div>
+        <div class="form-group">
+          <label>Max Activations</label>
+          <input type="number" id="cMaxAct" class="input-field" value="1" min="1" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Custom Key <span class="label-hint">(leave blank to auto-generate)</span></label>
+        <input type="text" id="cCustomKey" class="input-field mono" placeholder="LMS-XXXXX-XXXXX-XXXXX-XXXXX" />
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="cNotes" class="input-field" rows="2" placeholder="Optional notes…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="createLicense()">Create License</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ ACTIVATE MODAL ══════════════ -->
+<div class="modal-overlay" id="activateModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>⚡ Activate License</h3>
+      <button class="modal-close" onclick="closeActivateModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-info" id="activateLicKey"></p>
+      <div class="form-group">
+        <label>Device ID <span class="required">*</span></label>
+        <input type="text" id="activateDeviceId" class="input-field mono"
+               placeholder="MAC-AA:BB:CC:DD:EE:FF or HWID-XXXXXXXX" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeActivateModal()">Cancel</button>
+      <button class="btn btn-success" onclick="doActivate()">Activate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ TOAST ══════════════ -->
+<div id="toastContainer"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

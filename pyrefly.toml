@@ -1,0 +1,6 @@
+[python]
+# Point Pyrefly at the virtual environment's site-packages
+# (includes django-stubs and djangorestframework-stubs)
+site_package_path = [".venv/lib/python3.12/site-packages"]
+python_version = "3.12"
+use_untyped_imports = true

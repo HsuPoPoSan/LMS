@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 #  LicenseManager Pro — start.sh
-#  Sets up venv, installs deps, runs migrations, launches server
-# ════════════════════════════════════════════════════════════
+#  Installs deps, runs migrations, creates default admin, starts server
+# ═══════════════════════════════════════════════════════════════
 
 set -e
 
@@ -13,23 +13,22 @@ echo ""
 echo "⚡ LicenseManager Pro — Startup (Django)"
 echo "══════════════════════════════════════════"
 
-# ── Check .env ───────────────────────────────────────────────
+# ── Load .env ────────────────────────────────────────────────
 if [ ! -f ".env" ]; then
   if [ -f ".env.example" ]; then
     cp .env.example .env
     echo "📋 Created .env from .env.example"
-    echo "   ⚠️  Fill in your SUPABASE_URL and SUPABASE_KEY before running!"
+    echo "   ⚠️  Fill in your DB_HOST and DB_PASSWORD before running!"
     echo ""
   fi
 fi
 
 source .env 2>/dev/null || true
-if [[ "$SUPABASE_URL" == *"your-project-id"* ]] || [ -z "$SUPABASE_URL" ]; then
-  echo "❌ ERROR: Please set SUPABASE_URL in your .env file."
-  exit 1
-fi
-if [[ "$SUPABASE_KEY" == *"your-anon"* ]] || [ -z "$SUPABASE_KEY" ]; then
-  echo "❌ ERROR: Please set SUPABASE_KEY in your .env file."
+
+# Check database credentials
+if [ -z "$DB_PASSWORD" ] && [ -z "$DATABASE_URL" ]; then
+  echo "❌ ERROR: Set DB_PASSWORD (and DB_HOST) or DATABASE_URL in your .env file."
+  echo "   See .env.example for the required variables."
   exit 1
 fi
 
@@ -46,9 +45,9 @@ pip install -q -r requirements.txt
 
 # ── Migrations ───────────────────────────────────────────────
 echo "🗄️  Running database migrations…"
-python manage.py migrate --run-syncdb -v 0 2>/dev/null || python manage.py migrate -v 0
+python manage.py migrate -v 0
 
-# ── Default admin user ───────────────────────────────────────
+# ── Default admin ────────────────────────────────────────────
 python manage.py shell -c "
 from django.contrib.auth.models import User
 if not User.objects.filter(username='admin').exists():
@@ -62,12 +61,12 @@ echo ""
 echo "✅ Django + DRF ready"
 echo ""
 
-HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8000}"
+HOST_VAR="${HOST:-0.0.0.0}"
+PORT_VAR="${PORT:-8000}"
 
-echo "🚀 Starting Django server on http://localhost:$PORT"
-echo "   Dashboard: http://localhost:$PORT"
-echo "   API:       http://localhost:$PORT/api/"
+echo "🚀 Starting Django server on http://localhost:${PORT_VAR}"
+echo "   Dashboard: http://localhost:${PORT_VAR}"
+echo "   API:       http://localhost:${PORT_VAR}/api/"
 echo ""
 
-python manage.py runserver "$HOST:$PORT"
+python manage.py runserver "${HOST_VAR}:${PORT_VAR}"

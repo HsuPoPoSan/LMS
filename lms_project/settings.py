@@ -56,13 +56,49 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "lms_project.wsgi.application"
 
-# ── Database — SQLite for Django auth, Supabase for licenses ──────────────
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# ── Database — Supabase PostgreSQL ─────────────────────────────────────────
+#
+# Supabase exposes a direct Postgres connection.
+# In your Supabase dashboard → Settings → Database → Connection string
+# Copy the "URI" value and set it as DATABASE_URL in .env, OR
+# set the individual DB_* variables below.
+#
+# Direct connection (for long-lived processes / local dev):
+#   postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+#
+# Supabase Transaction Pooler (recommended for serverless / hosted):
+#   postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+
+_db_url = os.getenv("DATABASE_URL", "")
+
+if _db_url:
+    # Parse DATABASE_URL if provided (e.g. on Railway / Render / Heroku)
+    import urllib.parse as _up
+    _u = _up.urlparse(_db_url)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME":     _u.path.lstrip("/"),
+            "USER":     _u.username,
+            "PASSWORD": _u.password,
+            "HOST":     _u.hostname,
+            "PORT":     str(_u.port or 5432),
+            "OPTIONS":  {"sslmode": os.getenv("DB_SSLMODE", "require")},
+        }
     }
-}
+else:
+    # Individual env vars (preferred for Supabase)
+    DATABASES = {
+        "default": {
+            "ENGINE":   "django.db.backends.postgresql",
+            "NAME":     os.getenv("DB_NAME",     "postgres"),
+            "USER":     os.getenv("DB_USER",     "postgres"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST":     os.getenv("DB_HOST",     ""),
+            "PORT":     os.getenv("DB_PORT",     "5432"),
+            "OPTIONS":  {"sslmode": os.getenv("DB_SSLMODE", "require")},
+        }
+    }
 
 # ── Static Files ───────────────────────────────────────────────────────────
 STATIC_URL = "/static/"
@@ -87,12 +123,14 @@ REST_FRAMEWORK = {
     ],
 }
 
-# ── Supabase (read by database.py) ─────────────────────────────────────────
+# ── Supabase (only needed if using SDK for Realtime/Storage/Edge) ──────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # ── App settings ───────────────────────────────────────────────────────────
-APP_NAME = os.getenv("APP_NAME", "LicenseManager Pro")
+APP_NAME    = os.getenv("APP_NAME",    "LicenseManager Pro")
 APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
+
+USE_TZ = True   # Required: Supabase columns are TIMESTAMPTZ
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -7,6 +7,26 @@ import uuid
 from django.db import models
 
 
+class Customer(models.Model):
+    """A company or individual that owns one or more licenses."""
+
+    id            = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company_name  = models.CharField(max_length=200, unique=True)
+    contact_name  = models.CharField(max_length=200, blank=True, default="")
+    email         = models.EmailField(unique=True)
+    phone         = models.CharField(max_length=50, blank=True, default="")
+    notes         = models.TextField(blank=True, default="")
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "customers"
+        ordering = ["company_name"]
+
+    def __str__(self):
+        return self.company_name
+
+
 class License(models.Model):
     """Mirrors the licenseslist table — now managed by Django ORM."""
 
@@ -28,12 +48,16 @@ class License(models.Model):
     id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     license_key     = models.TextField(unique=True)
     status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default="inactive")
+    customer        = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="licenses",
+    )
     device_id       = models.TextField(blank=True, null=True)
     activated_at    = models.DateTimeField(blank=True, null=True)
     expired_at      = models.DateTimeField(blank=True, null=True)
     expiry_date     = models.DateTimeField(blank=True, null=True)
-    customer_name   = models.CharField(max_length=200)
-    customer_email  = models.EmailField(blank=True, default="")
     product_name    = models.CharField(max_length=200, default="General")
     license_type    = models.CharField(max_length=20, choices=TYPE_CHOICES, default="standard")
     max_activations = models.PositiveIntegerField(default=1)

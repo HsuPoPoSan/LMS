@@ -882,3 +882,86 @@ select.input-field    { cursor: pointer; }
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: var(--border-hover); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+
+/* ── Customer search dropdown ───────────────────────────────── */
+.customer-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 500;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.cd-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background var(--transition);
+  border-bottom: 1px solid var(--border);
+}
+.cd-item:last-child { border-bottom: none; }
+.cd-item:hover { background: var(--bg-glass-hover); }
+
+.cd-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.cd-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.cd-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+  cursor: default;
+  padding: 14px;
+}
+
+/* ── Customer info strip (auto-filled after selection) ─────── */
+.customer-info-strip {
+  background: rgba(108,99,255,0.06);
+  border: 1px solid rgba(108,99,255,0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: fadeIn 0.18s ease;
+}
+
+.cinfo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cinfo-label {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.cinfo-value {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* ── Required field asterisk ───────────────────────────────── */
+.required {
+  color: var(--accent-red);
+  margin-left: 2px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+

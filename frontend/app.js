@@ -137,6 +137,12 @@ const pages = {
     showSearch: false, showNew: false,
     load: loadAuditLogs,
   },
+  customers: {
+    title: 'Customers',
+    sub: 'Manage customer accounts',
+    showSearch: false, showNew: false,
+    load: loadCustomers,
+  },
   users: {
     title: 'Users',
     sub: 'Manage user accounts and access',
@@ -345,14 +351,33 @@ document.getElementById('searchInput').addEventListener('input', e => {
    CREATE LICENSE MODAL
 ───────────────────────────────────────────────────────────── */
 
-function openCreateModal() {
+async function openCreateModal() {
+  // Populate customer dropdown
+  const sel = document.getElementById('cCustomer');
+  sel.innerHTML = '<option value="">— Select a customer —</option>';
+  try {
+    const customers = await apiFetch('/api/customers');
+    customers.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.company_name + (c.contact_name ? ` (${c.contact_name})` : '');
+      opt.dataset.email = c.email || '';
+      opt.dataset.phone = c.phone || '';
+      opt.dataset.contact = c.contact_name || '';
+      sel.appendChild(opt);
+    });
+  } catch { /* silently ignore */ }
+  document.getElementById('cCustomerInfo').style.display = 'none';
   document.getElementById('createModal').classList.add('open');
 }
 
 function closeCreateModal() {
   document.getElementById('createModal').classList.remove('open');
-  ['cName', 'cEmail', 'cProduct', 'cNotes', 'cCustomKey'].forEach(id => {
-    document.getElementById(id).value = '';
+  document.getElementById('cCustomer').value = '';
+  document.getElementById('cCustomerInfo').style.display = 'none';
+  ['cProduct', 'cNotes', 'cCustomKey'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
   document.getElementById('cMaxAct').value = '1';
   document.getElementById('cExpiry').value = '';
@@ -360,15 +385,15 @@ function closeCreateModal() {
 }
 
 async function createLicense() {
-  const customer_name = document.getElementById('cName').value.trim();
-  if (!customer_name) { toast('Customer name is required', 'error'); return; }
+  const sel = document.getElementById('cCustomer');
+  const customer_id = sel.value.trim();
+  if (!customer_id) { toast('Please select a customer', 'error'); return; }
 
   const expiryRaw = document.getElementById('cExpiry').value;
   const expiry_date = expiryRaw ? new Date(expiryRaw).toISOString() : null;
 
   const body = {
-    customer_name,
-    customer_email: document.getElementById('cEmail').value.trim(),
+    customer_id,
     product_name: document.getElementById('cProduct').value.trim() || 'General',
     license_type: document.getElementById('cType').value,
     expiry_date,
@@ -433,8 +458,23 @@ async function openEditModal(licenseId) {
     _editLicId = licenseId;
 
     document.getElementById('editLicKey').textContent = `License: ${lic.license_key}`;
-    document.getElementById('eName').value = lic.customer_name || '';
-    document.getElementById('eEmail').value = lic.customer_email || '';
+
+    // Pre-fill customer search with current customer
+    const cust = lic.customer;
+    if (cust) {
+      document.getElementById('eCustomerSearch').value = cust.company_name || '';
+      document.getElementById('eCustomerId').value = cust.id || '';
+      document.getElementById('eCustomerInfoEmail').textContent = cust.email || '—';
+      document.getElementById('eCustomerInfoPhone').textContent = cust.phone || '—';
+      document.getElementById('eCustomerInfoContact').textContent = cust.contact_name || '—';
+      document.getElementById('eCustomerInfo').style.display = '';
+    } else {
+      document.getElementById('eCustomerSearch').value = '';
+      document.getElementById('eCustomerId').value = '';
+      document.getElementById('eCustomerInfo').style.display = 'none';
+    }
+    document.getElementById('eCustomerDropdown').style.display = 'none';
+
     document.getElementById('eProduct').value = lic.product_name || '';
     document.getElementById('eType').value = lic.license_type || 'standard';
     document.getElementById('eMaxAct').value = lic.max_activations ?? 1;
@@ -458,18 +498,19 @@ async function openEditModal(licenseId) {
 function closeEditModal() {
   document.getElementById('editModal').classList.remove('open');
   _editLicId = null;
+  document.getElementById('eCustomerDropdown').style.display = 'none';
+  document.getElementById('eCustomerInfo').style.display = 'none';
 }
 
 async function saveEdit() {
-  const customer_name = document.getElementById('eName').value.trim();
-  if (!customer_name) { toast('Customer name is required', 'error'); return; }
+  const customer_id = document.getElementById('eCustomerId').value.trim();
+  if (!customer_id) { toast('Please select a customer', 'error'); return; }
 
   const expiryRaw = document.getElementById('eExpiry').value;
   const expiry_date = expiryRaw ? new Date(expiryRaw).toISOString() : null;
 
   const body = {
-    customer_name,
-    customer_email: document.getElementById('eEmail').value.trim() || '',
+    customer_id,
     product_name: document.getElementById('eProduct').value.trim() || 'General',
     license_type: document.getElementById('eType').value,
     expiry_date,
@@ -647,6 +688,9 @@ document.getElementById('editModal').addEventListener('click', e => {
 document.getElementById('userModal').addEventListener('click', e => {
   if (e.target.id === 'userModal') closeUserModal();
 });
+document.getElementById('customerModal').addEventListener('click', e => {
+  if (e.target.id === 'customerModal') closeCustomerModal();
+});
 
 /* ESC to close */
 document.addEventListener('keydown', e => {
@@ -655,8 +699,212 @@ document.addEventListener('keydown', e => {
     closeActivateModal();
     closeEditModal();
     closeUserModal();
+    closeCustomerModal();
   }
 });
+
+/* ─────────────────────────────────────────────────────────────
+   CUSTOMER SEARCH DROPDOWN (Create & Edit modals)
+───────────────────────────────────────────────────────────── */
+
+let _customerSearchCache = [];
+
+async function fetchCustomerSuggestions(query) {
+  try {
+    const params = query ? `?search=${encodeURIComponent(query)}` : '';
+    const data = await apiFetch(`/api/customers${params}`);
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+function buildCustomerDropdown(containerId, items, onSelect) {
+  const dd = document.getElementById(containerId);
+  if (!items.length) {
+    dd.innerHTML = `<div class="cd-item cd-empty">No customers found</div>`;
+  } else {
+    dd.innerHTML = items.map(c => `
+      <div class="cd-item" data-id="${c.id}" data-name="${escAttr(c.company_name)}"
+           data-email="${escAttr(c.email)}" data-phone="${escAttr(c.phone || '')}"
+           data-contact="${escAttr(c.contact_name || '')}">
+        <div class="cd-name">${escHtml(c.company_name)}</div>
+        <div class="cd-sub">${escHtml(c.email)}${c.contact_name ? ' · ' + escHtml(c.contact_name) : ''}</div>
+      </div>
+    `).join('');
+  }
+  dd.style.display = 'block';
+  dd.querySelectorAll('.cd-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      onSelect({
+        id: el.dataset.id,
+        company_name: el.dataset.name,
+        email: el.dataset.email,
+        phone: el.dataset.phone,
+        contact_name: el.dataset.contact,
+      });
+      dd.style.display = 'none';
+    });
+  });
+}
+
+
+// ── Create modal customer select ──────────────────────────────
+document.getElementById('cCustomer').addEventListener('change', function () {
+  const opt = this.options[this.selectedIndex];
+  if (this.value) {
+    document.getElementById('cCustomerInfoEmail').textContent = opt.dataset.email || '—';
+    document.getElementById('cCustomerInfoPhone').textContent = opt.dataset.phone || '—';
+    document.getElementById('cCustomerInfoContact').textContent = opt.dataset.contact || '—';
+    document.getElementById('cCustomerInfo').style.display = '';
+  } else {
+    document.getElementById('cCustomerInfo').style.display = 'none';
+  }
+});
+
+
+
+// ── Edit modal customer search ────────────────────────────────
+let _eSearchTimer = null;
+document.getElementById('eCustomerSearch').addEventListener('input', e => {
+  clearTimeout(_eSearchTimer);
+  const q = e.target.value.trim();
+  if (!q) {
+    document.getElementById('eCustomerDropdown').style.display = 'none';
+    document.getElementById('eCustomerId').value = '';
+    document.getElementById('eCustomerInfo').style.display = 'none';
+    return;
+  }
+  _eSearchTimer = setTimeout(async () => {
+    const items = await fetchCustomerSuggestions(q);
+    buildCustomerDropdown('eCustomerDropdown', items, c => {
+      document.getElementById('eCustomerSearch').value = c.company_name;
+      document.getElementById('eCustomerId').value = c.id;
+      document.getElementById('eCustomerInfoEmail').textContent = c.email || '—';
+      document.getElementById('eCustomerInfoPhone').textContent = c.phone || '—';
+      document.getElementById('eCustomerInfoContact').textContent = c.contact_name || '—';
+      document.getElementById('eCustomerInfo').style.display = '';
+    });
+  }, 280);
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#eCustomerDropdown') && !e.target.matches('#eCustomerSearch')) {
+    document.getElementById('eCustomerDropdown').style.display = 'none';
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────
+   CUSTOMERS PAGE
+───────────────────────────────────────────────────────────── */
+
+async function loadCustomers() {
+  const tbody = document.getElementById('customersBody');
+  tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">Loading…</td></tr>`;
+  try {
+    const data = await apiFetch('/api/customers');
+    document.getElementById('customersCount').textContent = `${data.length} customer${data.length !== 1 ? 's' : ''}`;
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">No customers yet. Add your first customer!</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(c => `
+      <tr id="crow-${c.id}">
+        <td><strong style="font-size:0.88rem">${escHtml(c.company_name)}</strong></td>
+        <td style="font-size:0.84rem">${escHtml(c.contact_name || '—')}</td>
+        <td style="font-size:0.82rem;color:var(--text-secondary)">${escHtml(c.email)}</td>
+        <td style="font-size:0.82rem;color:var(--text-secondary)">${escHtml(c.phone || '—')}</td>
+        <td><span class="status-badge s-active">${c.license_count}</span></td>
+        <td style="font-size:0.78rem;color:var(--text-muted)">${fmtDate(c.created_at)}</td>
+        <td>
+          <div class="action-group">
+            <button class="btn-icon btn-edit" onclick="openCustomerModal('${c.id}')" title="Edit">✏️ Edit</button>
+            <button class="btn-icon btn-delete" onclick="deleteCustomer('${c.id}', '${escAttr(c.company_name)}')" title="Delete">🗑️</button>
+          </div>
+        </td>
+      </tr>`
+    ).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="color:var(--accent-red)">⚠️ ${e.message}</td></tr>`;
+    toast(`Failed to load customers: ${e.message}`, 'error');
+  }
+}
+
+let _editCustomerId = null;
+
+async function openCustomerModal(customerId) {
+  _editCustomerId = customerId;
+  const isEdit = !!customerId;
+
+  document.getElementById('customerModalTitle').textContent = isEdit ? '✏️ Edit Customer' : '🏢 New Customer';
+  document.getElementById('customerModalSaveBtn').textContent = isEdit ? 'Save Changes' : 'Create Customer';
+
+  // Reset fields
+  ['cuCompany', 'cuContact', 'cuPhone', 'cuEmail', 'cuNotes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+
+  if (isEdit) {
+    try {
+      const c = await apiFetch(`/api/customers/${customerId}`);
+      document.getElementById('cuCompany').value  = c.company_name || '';
+      document.getElementById('cuContact').value  = c.contact_name || '';
+      document.getElementById('cuPhone').value    = c.phone || '';
+      document.getElementById('cuEmail').value    = c.email || '';
+      document.getElementById('cuNotes').value    = c.notes || '';
+    } catch (e) {
+      toast(`Failed to load customer: ${e.message}`, 'error');
+      return;
+    }
+  }
+
+  document.getElementById('customerModal').classList.add('open');
+}
+
+function closeCustomerModal() {
+  document.getElementById('customerModal').classList.remove('open');
+  _editCustomerId = null;
+}
+
+async function saveCustomer() {
+  const isEdit = !!_editCustomerId;
+  const company = document.getElementById('cuCompany').value.trim();
+  const email   = document.getElementById('cuEmail').value.trim();
+  if (!company) { toast('Company name is required', 'error'); return; }
+  if (!email)   { toast('Email is required', 'error'); return; }
+
+  const body = {
+    company_name:  company,
+    contact_name:  document.getElementById('cuContact').value.trim(),
+    phone:         document.getElementById('cuPhone').value.trim(),
+    email,
+    notes:         document.getElementById('cuNotes').value.trim(),
+  };
+
+  try {
+    if (isEdit) {
+      await apiFetch(`/api/customers/${_editCustomerId}`, { method: 'PATCH', body });
+      toast('Customer updated!', 'success');
+    } else {
+      await apiFetch('/api/customers', { method: 'POST', body });
+      toast('Customer created!', 'success');
+    }
+    closeCustomerModal();
+    loadCustomers();
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function deleteCustomer(id, name) {
+  if (!confirm(`Delete customer "${name}"? This will also affect their licenses.`)) return;
+  try {
+    await apiFetch(`/api/customers/${id}`, { method: 'DELETE' });
+    toast(`Customer "${name}" deleted.`, 'info');
+    loadCustomers();
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
 
 /* ─────────────────────────────────────────────────────────────
    USERS PAGE

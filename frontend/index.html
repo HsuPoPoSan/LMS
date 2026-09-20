@@ -268,11 +268,9 @@
       <!-- Customer picker -->
       <div class="form-group">
         <label>Customer <span class="required">*</span></label>
-        <div style="position:relative">
-          <input type="text" id="cCustomerSearch" class="input-field" placeholder="Type to search customers…" autocomplete="off" />
-          <div id="cCustomerDropdown" class="customer-dropdown" style="display:none"></div>
-        </div>
-        <input type="hidden" id="cCustomerId" />
+        <select id="cCustomer" class="input-field">
+          <option value="">— Select a customer —</option>
+        </select>
       </div>
       <!-- Read-only auto-filled customer info -->
       <div id="cCustomerInfo" class="customer-info-strip" style="display:none">
@@ -527,6 +525,6 @@
 <!-- ══════════════ TOAST ══════════════ -->
 <div id="toastContainer"></div>
 
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>

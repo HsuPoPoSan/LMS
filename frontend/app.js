@@ -351,21 +351,30 @@ document.getElementById('searchInput').addEventListener('input', e => {
    CREATE LICENSE MODAL
 ───────────────────────────────────────────────────────────── */
 
-function openCreateModal() {
-  // Reset customer picker
-  document.getElementById('cCustomerSearch').value = '';
-  document.getElementById('cCustomerId').value = '';
+async function openCreateModal() {
+  // Populate customer dropdown
+  const sel = document.getElementById('cCustomer');
+  sel.innerHTML = '<option value="">— Select a customer —</option>';
+  try {
+    const customers = await apiFetch('/api/customers');
+    customers.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.company_name + (c.contact_name ? ` (${c.contact_name})` : '');
+      opt.dataset.email = c.email || '';
+      opt.dataset.phone = c.phone || '';
+      opt.dataset.contact = c.contact_name || '';
+      sel.appendChild(opt);
+    });
+  } catch { /* silently ignore */ }
   document.getElementById('cCustomerInfo').style.display = 'none';
-  document.getElementById('cCustomerDropdown').style.display = 'none';
   document.getElementById('createModal').classList.add('open');
 }
 
 function closeCreateModal() {
   document.getElementById('createModal').classList.remove('open');
-  document.getElementById('cCustomerSearch').value = '';
-  document.getElementById('cCustomerId').value = '';
+  document.getElementById('cCustomer').value = '';
   document.getElementById('cCustomerInfo').style.display = 'none';
-  document.getElementById('cCustomerDropdown').style.display = 'none';
   ['cProduct', 'cNotes', 'cCustomKey'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -376,7 +385,8 @@ function closeCreateModal() {
 }
 
 async function createLicense() {
-  const customer_id = document.getElementById('cCustomerId').value.trim();
+  const sel = document.getElementById('cCustomer');
+  const customer_id = sel.value.trim();
   if (!customer_id) { toast('Please select a customer', 'error'); return; }
 
   const expiryRaw = document.getElementById('cExpiry').value;
@@ -738,34 +748,21 @@ function buildCustomerDropdown(containerId, items, onSelect) {
   });
 }
 
-// ── Create modal customer search ──────────────────────────────
-let _cSearchTimer = null;
-document.getElementById('cCustomerSearch').addEventListener('input', e => {
-  clearTimeout(_cSearchTimer);
-  const q = e.target.value.trim();
-  if (!q) {
-    document.getElementById('cCustomerDropdown').style.display = 'none';
-    document.getElementById('cCustomerId').value = '';
+
+// ── Create modal customer select ──────────────────────────────
+document.getElementById('cCustomer').addEventListener('change', function () {
+  const opt = this.options[this.selectedIndex];
+  if (this.value) {
+    document.getElementById('cCustomerInfoEmail').textContent = opt.dataset.email || '—';
+    document.getElementById('cCustomerInfoPhone').textContent = opt.dataset.phone || '—';
+    document.getElementById('cCustomerInfoContact').textContent = opt.dataset.contact || '—';
+    document.getElementById('cCustomerInfo').style.display = '';
+  } else {
     document.getElementById('cCustomerInfo').style.display = 'none';
-    return;
-  }
-  _cSearchTimer = setTimeout(async () => {
-    const items = await fetchCustomerSuggestions(q);
-    buildCustomerDropdown('cCustomerDropdown', items, c => {
-      document.getElementById('cCustomerSearch').value = c.company_name;
-      document.getElementById('cCustomerId').value = c.id;
-      document.getElementById('cCustomerInfoEmail').textContent = c.email || '—';
-      document.getElementById('cCustomerInfoPhone').textContent = c.phone || '—';
-      document.getElementById('cCustomerInfoContact').textContent = c.contact_name || '—';
-      document.getElementById('cCustomerInfo').style.display = '';
-    });
-  }, 280);
-});
-document.addEventListener('click', e => {
-  if (!e.target.closest('#cCustomerDropdown') && !e.target.matches('#cCustomerSearch')) {
-    document.getElementById('cCustomerDropdown').style.display = 'none';
   }
 });
+
+
 
 // ── Edit modal customer search ────────────────────────────────
 let _eSearchTimer = null;
